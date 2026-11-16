@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phish or Legit?</title>
+<style>
+:root {
+  /* Deliberately plain: white page, black text, one blue for buttons. */
+  --bg: #ffffff;
+  --text: #111111;
+  --muted: #666666;
+  --line: #cccccc;
+  --btn: #1a55b0;
+  --good: #1e7a34;
+  --bad: #b00020;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 17px; line-height: 1.45; padding: 20px 16px 40px; }
+main { max-width: 480px; margin: 0 auto; }
+h1 { font-size: 26px; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); font-size: 15px; }
+button { font: inherit; font-size: 18px; padding: 12px 16px; border-radius: 6px; cursor: pointer; width: 100%; }
+button:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+.primary { background: var(--btn); color: #fff; border: 1px solid var(--btn); }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.choices button { background: #fff; color: var(--text); border: 1px solid #888; }
+.choices button[disabled] { opacity: .5; cursor: default; }
+.msg { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-top: 8px; }
+.msg .row { font-size: 15px; }
+.msg .label { color: var(--muted); }
+.msg hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+.msg .body > div + div { margin-top: 8px; }
+.link { color: #1a55b0; text-decoration: underline; word-break: break-all; }
+.fakebtn { display: inline-block; border: 1px solid #1a55b0; color: #1a55b0; padding: 6px 10px; border-radius: 4px; font-size: 15px; }
+.small { font-size: 14px; color: var(--muted); word-break: break-all; }
+.result { font-size: 24px; font-weight: 700; margin: 16px 0 6px; }
+#why { margin: 0 0 14px; }
+.result.good { color: var(--good); }
+.result.bad { color: var(--bad); }
+.score { font-size: 48px; font-weight: 700; margin: 8px 0 16px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+
+  <section id="start">
+    <h1>Phish or Legit?</h1>
+    <p>You'll see 12 emails and texts. Decide if each one is a scam (phish) or real (legit).</p>
+    <p class="muted">All messages are made up for practice. Nothing is collected.</p>
+    <button class="primary" id="go">Start</button>
+  </section>
+
+  <section id="quiz" hidden>
+    <p class="muted" id="qnum">Question 1 of 12</p>
+    <div class="msg" id="msg"></div>
+    <div class="choices">
+      <button id="pickPhish">Phish</button>
+      <button id="pickLegit">Legit</button>
+    </div>
+    <div id="after" hidden>
+      <div class="result" id="result" aria-live="polite"></div>
+      <p id="why"></p>
+      <button class="primary" id="next">Next question</button>
+    </div>
+  </section>
+
+  <section id="done" hidden>
+    <h1>Your score</h1>
+    <div class="score" id="final">0/12</div>
+    <button class="primary" id="again">Play again</button>
+  </section>
+
+</main>
+
+<script>
+const QUESTIONS = [
+  // ---- LEGIT (5) ----
+  { type: "email", from: "Mercyhurst IT Services &lt;helpdesk@mercyhurst.edu&gt;", subject: "Your password expires in 7 days", answer: "legit",
+    why: "It comes from the real mercyhurst.edu address and the button goes to password.mercyhurst.edu, the school's own site.",
+    body: ["Your Mercyhurst account password will expire in 7 days. You can change it anytime before then using the self-service password portal.",
+           '<span class="fakebtn">Change Password</span>', '<span class="small">Button goes to: password.mercyhurst.edu</span>',
+           "If you have trouble, contact the Help Desk in Hammermill or call ext. 2400."] },
+  { type: "sms", from: "34221", answer: "legit",
+    why: "It comes from a bank short code, only asks you to reply YES or NO, and never asks for your PIN or card number.",
+    body: ["First Harbor Bank: Did you attempt a $312.40 purchase at TechMart on card ending 4417? Reply YES or NO. We will never ask for your PIN or full card number."] },
+  { type: "email", from: "CloudDrive &lt;drive-shares-noreply@clouddrive.com&gt;", subject: "Prof. Pearson shared \"CYBR 101 - Lab 4 Instructions\" with you", answer: "legit",
+    why: "Both the sender and the link use the real clouddrive.com domain, and a lab handout from your professor is expected.",
+    body: ["Prof. Pearson (pearson@mercyhurst.edu) has shared a document with you.", "<b>CYBR 101 - Lab 4 Instructions</b>",
+           '<span class="fakebtn">Open</span>', '<span class="small">Button goes to: docs.clouddrive.com/document/d/8fK2pLq</span>'] },
+  { type: "sms", from: "72645", answer: "legit",
+    why: "It comes from a short code and the tracking link goes to the real parcelpoint.com site.",
+    body: ['ParcelPoint: Your package 1Z84A3W is out for delivery and will arrive today by 8 PM. Track it: <span class="link">parcelpoint.com/track/1Z84A3W</span>'] },
+  { type: "email", from: "Dr. Mansour &lt;mansour@mercyhurst.edu&gt;", subject: "Cyber club this Thursday", answer: "legit",
+    why: "It's from Dr. Mansour's real mercyhurst.edu address, matches a meeting you already know about, and the sign-up link is on the real clouddrive.com site.",
+    body: ["Hi everyone, quick reminder that cyber club meets Thursday at 6 PM in Hammermill 126. We'll be splitting into teams for the CTF practice set.",
+           'Please sign up for a team before Wednesday night: <span class="link">forms.clouddrive.com/cyberclub-ctf</span>',
+           "See you there,<br>Dr. Mansour"] },
+
+  // ---- PHISH (7) ----
+  { type: "email", from: "Mercyhurst IT Services &lt;helpdesk@mercyhurst-edu.com&gt;", subject: "Your password expires in 2 days", answer: "phish",
+    why: "The sender and link use mercyhurst-edu.com, a lookalike of the real mercyhurst.edu, and real IT never asks you to confirm your current password.",
+    body: ["Your Mercyhurst account password will expire in 2 days. To keep using your current password, please confirm it using the link below.",
+           '<span class="fakebtn">Keep Current Password</span>', '<span class="small">Button goes to: mercyhurst-edu.com/password</span>',
+           "Thank you,<br>IT Services"] },
+  { type: "email", from: "Prof. Pearson &lt;pearson.mercyhurst@gmail.com&gt;", subject: "Quick favor", answer: "phish",
+    why: "A professor would email from their mercyhurst.edu address, not Gmail, and \"I need a quick favor, I'm stuck in a meeting\" is the classic opener to a gift card scam.",
+    body: ["Hi, are you on campus right now? I need a quick favor and I'm stuck in a meeting. Let me know when you see this.",
+           "Prof. Pearson<br><span class=\"small\">Sent from my phone</span>"] },
+  { type: "email", from: "CloudDrive &lt;drive-shares-noreply@clouddrive-share.com&gt;", subject: "Prof. Pearson shared \"CYBR 101 - Final Grades\" with you", answer: "phish",
+    why: "The sender is clouddrive-share.com and the link's real domain is docs-view.app, so it's a fake login page built to steal your password.",
+    body: ["Prof. Pearson (pearson@mercyhurst.edu) has shared a spreadsheet with you.", "<b>CYBR 101 - Final Grades</b>",
+           '<span class="fakebtn">Open</span>', '<span class="small">Button goes to: clouddrive.com.docs-view.app/login</span>'] },
+  { type: "sms", from: "+1 (412) 555-0193", answer: "phish",
+    why: "It comes from a regular phone number instead of a short code, and the link goes to parcelpoint-delivery.com, not the real parcelpoint.com.",
+    body: ['ParcelPoint: We tried to deliver your package today but the address was incomplete. Please update it so we can try again: <span class="link">parcelpoint-delivery.com/update</span>'] },
+  { type: "sms", from: "+1 (814) 555-0163", answer: "phish",
+    why: "Real banks text from short codes and tell you to call the number on the back of your card, not a number they give you.",
+    body: ["First Harbor Bank: Unusual activity was detected on your debit card. For your security, please call our fraud department at (814) 555-0163 as soon as possible."] },
+  { type: "email", from: "Hannah Reed &lt;hreed.careers@gmail.com&gt;", subject: "Part-time research assistant position", answer: "phish",
+    why: "A real recruiter wouldn't use a Gmail address, and $400 a week for 10 flexible hours in exchange for your personal info is too good to be true.",
+    body: ["Hi, I found your contact through the Mercyhurst student directory. Our team is hiring a part-time remote research assistant: flexible hours, about 10 hours a week, $400 per week.",
+           "If you're interested, reply with your full name, phone number, and a personal email address and I'll send the details.",
+           "Best,<br>Hannah Reed<br>Talent Acquisition"] },
+  { type: "email", from: "StreamBox &lt;billing@streambox.co&gt;", subject: "Your payment didn't go through", answer: "phish",
+    why: "The sender and link use streambox.co instead of the real streambox.com, a one-letter difference that's easy to miss.",
+    body: ["We weren't able to process your monthly payment. To avoid an interruption to your membership, please update your payment details.",
+           '<span class="fakebtn">Update Payment</span>', '<span class="small">Button goes to: streambox.co/account/billing</span>',
+           "The StreamBox Team"] }
+];
+
+const $ = (id) => document.getElementById(id);
+let order = [], i = 0, score = 0;
+
+function shuffle(a) {
+  for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; }
+  return a;
+}
+
+function render(q) {
+  let head = q.type === "sms"
+    ? `<div class="row"><span class="label">Text from:</span> ${q.from}</div>`
+    : `<div class="row"><span class="label">From:</span> ${q.from}</div><div class="row"><span class="label">Subject:</span> <b>${q.subject}</b></div>`;
+  return `${head}<hr><div class="body">${q.body.map(b => `<div>${b}</div>`).join("")}</div>`;
+}
+
+function show(id) { ["start", "quiz", "done"].forEach(s => $(s).hidden = s !== id); window.scrollTo(0, 0); }
+
+function start() {
+  order = shuffle(QUESTIONS.slice()); i = 0; score = 0;
+  show("quiz"); load();
+}
+
+function load() {
+  $("qnum").textContent = `Question ${i + 1} of ${order.length}`;
+  $("msg").innerHTML = render(order[i]);
+  $("after").hidden = true;
+  $("pickPhish").disabled = false; $("pickLegit").disabled = false;
+  window.scrollTo(0, 0);
+}
+
+function pick(choice) {
+  const right = choice === order[i].answer;
+  if (right) score++;
+  $("pickPhish").disabled = true; $("pickLegit").disabled = true;
+  $("result").textContent = right ? "Correct" : "Incorrect";
+  $("result").className = "result " + (right ? "good" : "bad");
+  $("why").textContent = order[i].why;
+  $("next").textContent = i === order.length - 1 ? "See score" : "Next question";
+  $("after").hidden = false;
+}
+
+$("go").addEventListener("click", start);
+$("again").addEventListener("click", start);
+$("pickPhish").addEventListener("click", () => pick("phish"));
+$("pickLegit").addEventListener("click", () => pick("legit"));
+$("next").addEventListener("click", () => {
+  if (i < order.length - 1) { i++; load(); }
+  else { $("final").textContent = `${score}/${order.length}`; show("done"); }
+});
+</script>
+</body>
+</html>
